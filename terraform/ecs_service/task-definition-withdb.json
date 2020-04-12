@@ -1,0 +1,60 @@
+[
+  {
+    "name": "${service_name}",
+    "image": "${image}",
+    "cpu": ${cpu},
+    "memory": ${memory},
+    "essential": true,
+    "links": [ "${service_name}-db:db"],
+    "portMappings": [
+      {
+        "containerPort": ${port},
+        "hostPort": 9000
+      }
+    ],
+    "secrets": ${secrets},
+    "environment": ${envs},
+    "dependsOn": [
+      {
+        "containerName": "${service_name}-db",
+        "condition": "HEALTHY"
+      }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${log_group}",
+        "awslogs-region": "${region}",
+        "awslogs-stream-prefix": "${service_name}"
+      }
+    }
+  },
+  {
+    "name": "${service_name}-db",
+    "image": "${db_image}",
+    "cpu": ${cpu},
+    "memory": ${memory},
+    "essential": true,
+    "portMappings": [
+      {
+        "containerPort": ${db_port},
+        "hostPort": 9002
+      }
+    ],
+    "environment": ${db_envs},
+    "healthCheck": {
+	"command": ["CMD-SHELL", "pg_isready", "-u", "postgres"],
+        "interval": 5,
+        "timeout": 3,
+        "retries": 10
+    },
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${log_group}",
+        "awslogs-region": "${region}",
+        "awslogs-stream-prefix": "${service_name}/db"
+      }
+    }
+  }
+]

@@ -23,6 +23,11 @@ variable "github_url" {}
 
 variable "branch" {}
 
+
+variable "db_envs" {
+  default = []
+}
+
 variable "envs" {
 }
 
@@ -235,19 +240,23 @@ resource "aws_ecs_service" "service" {
 
 resource "aws_ecs_task_definition" "task" {
   family = var.service_name
-  container_definitions = templatefile("task-definition.json", {
+  container_definitions = templatefile(length(var.db_envs) == 0 ? "task-definition.json" : "task-definition-withdb.json", {
     port         = var.port
     region       = "us-east-1"
-    image        =  "${aws_ecr_repository.ecr.repository_url}:prod"
+    image        = "${aws_ecr_repository.ecr.repository_url}:prod"
     secrets      = jsonencode(var.secrets)
     envs         = jsonencode(var.envs)
     log_group    = "/${var.project}/${var.service_name}/ecs/task"
     service_name = var.service_name
     memory       = var.memory
     cpu          = var.cpu
+
+    db_envs  = jsonencode(var.db_envs)
+    db_image = "postgres"
+    db_port  = 5432
   })
-  memory                   = var.memory
-  cpu                      = var.cpu
+  memory                   = length(var.db_envs) == 0 ? var.memory : var.memory * 2
+  cpu                      = length(var.db_envs) == 0 ? var.cpu : var.cpu * 2
   task_role_arn            = data.aws_iam_role.ecs_task.arn
   execution_role_arn       = data.aws_iam_role.ecs_task.arn
   network_mode             = "bridge"

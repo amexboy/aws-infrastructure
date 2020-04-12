@@ -5,7 +5,7 @@ provider "aws" {
 terraform {
   backend "s3" {
     bucket = "et-covid-19-terraform-states"
-    key = "cluster"
+    key    = "cluster"
   }
 }
 
@@ -19,7 +19,7 @@ variable "subnet_initial" {
   default = "10.2"
 }
 variable "machine_type" {
-  default = "t2.micro"
+  default = "t3.micro"
 }
 
 variable "domain" {}
@@ -29,7 +29,7 @@ variable "min_count" {
 }
 
 variable "max_count" {
-  default = 3
+  default = 1
 }
 
 variable "desired_count" {
@@ -43,7 +43,7 @@ locals {
   azs = [
     "${var.region}a",
     "${var.region}b",
-    "${var.region}c"]
+  "${var.region}c"]
 }
 
 module "vpc" {
@@ -56,10 +56,10 @@ module "vpc" {
   private_subnets = ["${var.subnet_initial}.1.0/24", "${var.subnet_initial}.2.0/24", "${var.subnet_initial}.3.0/24"]
   public_subnets  = ["${var.subnet_initial}.101.0/24", "${var.subnet_initial}.102.0/24", "${var.subnet_initial}.103.0/24"]
 
-  enable_nat_gateway = false
-  enable_vpn_gateway = false
-  enable_dns_support = true
-  enable_dns_hostnames =  true
+  enable_nat_gateway   = false
+  enable_vpn_gateway   = false
+  enable_dns_support   = true
+  enable_dns_hostnames = true
 
   private_subnet_tags = {
     Private = "true"
@@ -80,18 +80,22 @@ resource "aws_iam_instance_profile" "profile" {
 
 }
 
-resource "aws_launch_template" "lunch_template" {
+resource "aws_launch_configuration" "lunch_template" {
   name_prefix   = "${local.env}-template-"
   image_id      = "ami-00f69adbdc780866c"
   instance_type = var.machine_type
 
-  iam_instance_profile {
-    arn = aws_iam_instance_profile.profile.arn
+  iam_instance_profile = aws_iam_instance_profile.profile.name
+
+  root_block_device {
+    volume_type           = "standard"
+    volume_size           = 30
+    delete_on_termination = true
   }
 
-  user_data = base64encode(templatefile("userdata.sh", {
+  user_data = templatefile("userdata.sh", {
     cluster_name = local.cluster_name
-  }))
+  })
 }
 
 resource "aws_autoscaling_group" "asg" {
@@ -102,15 +106,11 @@ resource "aws_autoscaling_group" "asg" {
   min_size            = var.min_count
   vpc_zone_identifier = module.vpc.public_subnets[*]
 
-
-  launch_template {
-    id      = aws_launch_template.lunch_template.id
-    version = "$Latest"
-  }
+  launch_configuration = aws_launch_configuration.lunch_template.id
 
   lifecycle {
     ignore_changes = [
-      desired_capacity]
+    desired_capacity]
   }
 }
 
@@ -143,7 +143,7 @@ data "aws_route53_zone" "zone" {
 
 resource "aws_route53_record" "hosted_zone" {
   allow_overwrite = true
-  name = "*.${var.domain}"
+  name            = "*.${var.domain}"
   zone_id         = "${data.aws_route53_zone.zone.zone_id}"
   type            = "A"
 
